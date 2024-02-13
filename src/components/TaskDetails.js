@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react"
-import { useParams, Navigate, useNavigate } from "react-router-dom"
+import { useParams, useNavigate } from "react-router-dom"
 import Button from "./Button"
 
 function TaskDetails() {
     const [loading, setLoading] = useState(true)
     const [task, setTask] = useState({})
-    const [error, setError] = useState(null)
 
     const params = useParams()
     const navigate = useNavigate()
@@ -23,7 +22,7 @@ function TaskDetails() {
     useEffect(() => {
         const fetchTask = async () => {
             const username = sessionStorage.getItem('username');
-            const res = await fetch(`http://localhost:5000/tasks/${username}/${params.id}`)
+            const res = await fetch(`http://localhost:5000/users/${username}/tasks/${params.id}`)
             const data = await res.json()
 
             if (res.status === 404) {

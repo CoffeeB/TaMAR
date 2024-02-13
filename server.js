@@ -1,142 +1,134 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs').promises;
+const mongoose = require('mongoose');
 
 const app = express();
-const PORT = 4000;
 
 app.use(express.json());
 app.use(cors());
 
-// laoding Data from db.json
-let data = { users: [] };
-fs.readFile('db.json', 'utf8')
-    .then((fileData) => {
-        data = JSON.parse(fileData);
-        startServer(); // Start server after data is loaded
-    })
-    .catch((err) => {
-        console.error('Error reading data file:', err);
-    });
+// MongoDB connection
+mongoose.connect('mongodb+srv://Jesse_Admin:Abafoni-001@cluster.ksa8yg5.mongodb.net/TaMAR', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('MongoDB Connected'))
+.catch(err => console.log(err));
 
-function startServer() {
-    // Getting tasks of a user
-    app.get('/tasks/:username', (req, res) => {
-        const { username } = req.params;
-        const user = data.users.find((user) => user.username === username);
-        console.log('Found user:', user); // Log the user object
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        const tasks = user.tasks; // Access tasks from the user object
-        if (!tasks || tasks.length === 0) {
-            return res.status(404).json({ error: 'No tasks found for this user' });
-        }
-        res.json(tasks);
-    });   
+// Define MongoDB schema for tasks
+const taskSchema = new mongoose.Schema({
+  userId: String,
+  text: String,
+  day: Date,
+  reminder: Boolean
+});
 
-    // Adding tasks to users
-    app.post('/tasks/:username', (req, res) => {
-        const { username } = req.params;
-        const { task } = req.body;
-        const user = data.users.find((user) => user.username === username);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        if (!task) {
-            return res.status(400).json({ error: 'Task data is missing' });
-        }
-        user.tasks.push(task);
-        fs.writeFile('db.json', JSON.stringify(data, null, 2))
-            .then(() => {
-                res.status(201).json(task);
-            })
-            .catch((err) => {
-                console.error('Error writing data to file:', err);
-                res.status(500).json({ error: 'Error saving task' });
-            });
-    });
+// Define MongoDB schema for users
+const userSchema = new mongoose.Schema({
+  username: String,
+  password: String
+});
 
-    // deleting tasks
-    app.delete('/tasks/:username/:taskId', (req, res) => {
-        const { username } = req.params;
-        const userIndex = data.users.findIndex((user) => user.username === username);
-        if (userIndex === -1) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        const taskId = parseInt(req.params.taskId, 10); // Convert taskId to integer
-        const taskIndex = data.users[userIndex].tasks.findIndex((task) => task.id === taskId);
-        if (taskIndex === -1) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        data.users[userIndex].tasks.splice(taskIndex, 1);
-        fs.writeFile('db.json', JSON.stringify(data, null, 2))
-            .then(() => {
-                res.status(200).json({ message: 'Task deleted successfully' });
-            })
-            .catch((err) => {
-                console.error('Error writing data to file:', err);
-                res.status(500).json({ error: 'Error deleting task' });
-            });
-    });
+// Create models for tasks and users
+const Task = mongoose.model('Task', taskSchema);
+const User = mongoose.model('User', userSchema);
 
-    // logging in user
-    app.post('/login', (req,res) => {
-        const {username,password} = req.body;
-        const user = data.users.find(user => user.username === username && user.password === password);
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid username or password'})
-        }
-        const loggedInuser = { ...user, loggedIn : true}
-        res.json(loggedInuser);
-    });
+// Getting tasks of a user
+app.get('/users/:username/tasks', async (req, res) => {
+  const { username } = req.params;
+  try {
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const userTasks = await Task.find({ userId: user._id });
+    res.json(userTasks);
+  } catch (error) {
+    console.error('Error getting user tasks:', error);
+    res.status(500).json({ error: 'Error getting user tasks' });
+  }
+});
 
-    // toggling reminders
-    app.put('/tasks/:username/:taskId', (req, res) => {
-        const { username, taskId } = req.params;
-        const { reminder } = req.body;
-        const userIndex = data.users.findIndex((user) => user.username === username);
-        if (userIndex === -1) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        const taskIndex = data.users[userIndex].tasks.findIndex((task) => task.id === taskId);
-        if (taskIndex === -1) {
-            return res.status(404).json({ error: 'Task not found' });
-        }
-        data.users[userIndex].tasks[taskIndex].reminder = reminder;
-        fs.writeFile('db.json', JSON.stringify(data, null, 2))
-            .then(() => {
-                res.status(200).json({ message: 'Task updated successfully' });
-            })
-            .catch((err) => {
-                console.error('Error writing data to file:', err);
-                res.status(500).json({ error: 'Error updating task' });
-            });
-    });
+// Adding tasks
+app.post('/tasks', async (req, res) => {
+  const { userId, text, day, reminder } = req.body;
+  try {
+    const newTask = new Task({ userId, text, day, reminder });
+    const savedTask = await newTask.save();
+    res.status(201).json(savedTask);
+  } catch (error) {
+    console.error('Error adding task:', error);
+    res.status(500).json({ error: 'Error adding task' });
+  }
+});
 
-    // signing up user
-    app.post('/signup', (req,res) => {
-        const {username,password} = req.body;
-        if (!username || !password) {
-            return res.status(400).json({ error: 'Username and Password are required!'});
-        }
-        const userExists = data.users.some((user) => user.username === username);
-        if (userExists) {
-            return res.status(409).json({ error: 'Username already exists'});
-        }
-        const newUser = { username, password, tasks: [] };
-        data.users.push(newUser);
-        fs.writeFile('db.json', JSON.stringify(data, null, 2))
-            .then(() => {
-                res.status(201).json({ message: 'User Signed up Successfully'});
-            })
-            .catch((err) => {
-                console.error('Error writing to data file:', err);
-                return res.status(500).json({ error: 'Error saving user'});
-            });
-    });
+// Deleting tasks
+app.delete('/users/:userId/tasks/:taskId', async (req, res) => {
+  const { userId, taskId } = req.params;
+  try {
+    const task = await Task.findOneAndDelete({ _id: taskId, userId });
+    if (!task) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json({ message: 'Task deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting task:', error);
+    res.status(500).json({ error: 'Error deleting task' });
+  }
+});
 
-    app.listen(PORT, () => {
-        console.log(`server is listening on port:- ${PORT}`);
-    });
-}
+// Login user
+app.post('/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = await User.findOne({ username, password });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+    res.json({ ...user.toObject(), loggedIn: true });
+  } catch (error) {
+    console.error('Error logging in:', error);
+    res.status(500).json({ error: 'Error logging in' });
+  }
+});
+
+// Update task reminder
+app.put('/users/:userId/tasks/:taskId', async (req, res) => {
+  const { userId, taskId } = req.params;
+  const { reminder } = req.body;
+  try {
+    const updatedTask = await Task.findOneAndUpdate(
+      { _id: taskId, userId },
+      { reminder },
+      { new: true }
+    );
+    if (!updatedTask) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json({ message: 'Task updated successfully' });
+  } catch (error) {
+    console.error('Error updating task:', error);
+    res.status(500).json({ error: 'Error updating task' });
+  }
+});
+
+// Signup user
+app.post('/signup', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Username already exists' });
+    }
+    const newUser = new User({ username, password });
+    const savedUser = await newUser.save();
+    res.status(201).json({ message: 'User signed up successfully', user: savedUser.toObject() });
+  } catch (error) {
+    console.error('Error signing up user:', error);
+    res.status(500).json({ error: 'Error signing up user' });
+  }
+});
+
+app.listen(4000, '0.0.0.0', () => {
+  console.log(`Server is listening on port 4000`);
+});
