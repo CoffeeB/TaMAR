@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -37,8 +37,8 @@ const App = () => {
     sessionStorage.setItem('loggedIn', 'true');
     sessionStorage.setItem('username', username);
     console.log('Stored username:', sessionStorage.getItem('username'));
-    getTasks(username); // Move this line here
     setLoggedIn(true); // Set loggedIn state after setting sessionStorage
+    getTasks(username); // Fetch tasks after login
   };
 
   // Fetch user's tasks
@@ -84,8 +84,6 @@ const App = () => {
 
       // Update the state with the new task
       setTasks((prevTasks) => [...prevTasks, data]);
-
-      // No need to fetch updated task list here
     } catch (error) {
       console.error('Error adding task:', error);
     }
@@ -101,20 +99,10 @@ const App = () => {
       if (!res.ok) {
         throw new Error('Failed to delete task');
       }
-      // Assuming tasks state is updated after successful deletion, no need to explicitly update here
+      // Remove the deleted task from state
+      setTasks((prevTasks) => prevTasks.filter(task => task._id !== taskId));
     } catch (error) {
       console.error('Error deleting task:', error);
-    }
-  };
-
-  // Example of how to call the deleteTask function
-  const handleDeleteTask = async (username, taskId) => {
-    try {
-      await deleteTask(username, taskId);
-      // If deletion is successful, update the tasks state to reflect the changes
-      // You may need to implement this logic based on your app structure
-    } catch (error) {
-      console.error('Error handling task deletion:', error);
     }
   };
 
@@ -122,21 +110,19 @@ const App = () => {
   const toggleReminder = async (id) => {
     try {
       const username = sessionStorage.getItem('username');
-      const task = tasks.find((task) => task.id === id);
+      const task = tasks.find((task) => task._id === id);
       const updTask = { ...task, reminder: !task.reminder };
-      const res = await fetch(`http://localhost:4000/tasks/${id}`, {
+      const res = await fetch(`http://localhost:4000/users/${username}/tasks/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updTask)
       });
-      if (!res.ok) {
-        throw new Error('Failed to toggle reminder');
-      }
       const data = await res.json();
-      setTasks(
-        tasks.map((task) => task.id === id ? { ...task, reminder: data.reminder } : task)
+      // Update the reminder status of the task in state
+      setTasks((prevTasks) =>
+        prevTasks.map((task) => (task._id === id ? { ...task, reminder: data.reminder } : task))
       );
     } catch (error) {
       console.error('Error toggling reminder:', error);

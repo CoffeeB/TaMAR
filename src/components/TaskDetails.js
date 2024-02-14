@@ -22,7 +22,7 @@ function TaskDetails() {
     useEffect(() => {
         const fetchTask = async () => {
             const username = sessionStorage.getItem('username');
-            const res = await fetch(`http://localhost:5000/users/${username}/tasks/${params.id}`)
+            const res = await fetch(`http://localhost:4000/users/${username}/tasks/${params.id}`)
             const data = await res.json()
 
             if (res.status === 404) {
@@ -34,7 +34,7 @@ function TaskDetails() {
         }
 
         fetchTask()
-    })
+    }, [params, navigate]);
 
     return loading ? ( 
     <h3>Loading...</h3>
@@ -42,6 +42,7 @@ function TaskDetails() {
         <div>
             <h3>{task.text}</h3>
             <p>{formatDate(task.day)} {formatTime(task.day)}</p>
+            <p>Reminder: {task.reminder ? 'Enabled' : 'Disabled'}</p>
             <Button onClick={() => { navigate(-1)}} text='Go Back' />
         </div>
     )

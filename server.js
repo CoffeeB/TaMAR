@@ -41,7 +41,7 @@ app.get('/users/:username/tasks', async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    const userTasks = await Task.find({ userId: user._id });
+    const userTasks = await Task.find({ userId: username });
     res.json(userTasks);
   } catch (error) {
     console.error('Error getting user tasks:', error);
@@ -111,6 +111,22 @@ app.put('/users/:userId/tasks/:taskId', async (req, res) => {
     res.status(500).json({ error: 'Error updating task' });
   }
 });
+
+// Fetching task details by task ID
+app.get('/users/:username/tasks/:taskId', async (req, res) => {
+const { taskId } = req.params;
+try {
+    const task = await Task.findById(taskId);
+    if (!task) {
+    return res.status(404).json({ error: 'Task not found' });
+    }
+    res.json(task);
+} catch (error) {
+    console.error('Error fetching task details:', error);
+    res.status(500).json({ error: 'Error fetching task details' });
+}
+});  
+
 
 // Signup user
 app.post('/signup', async (req, res) => {
